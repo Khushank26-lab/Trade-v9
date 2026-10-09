@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 import time
 
 # --- PAGE CONFIGURATION ---
-st.set_page_config(page_title="K hushank AI Screener", page_icon="⚡", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Khushank's Screener", page_icon="⚡", layout="wide", initial_sidebar_state="expanded")
 
 # --- ADVANCED UI ANIMATIONS & GLASSMORPHISM CSS ---
 st.markdown("""
@@ -33,7 +33,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="title-text">⚡ Institutional AI Screener v10</div>', unsafe_allow_html=True)
+st.markdown('<div class="title-text">⚡ Khushank\'s Screener</div>', unsafe_allow_html=True)
 st.markdown("*Cross-referencing 20-year deep learning AI output with live intraday volatility and strict fundamental shields.*")
 st.markdown("---")
 
@@ -54,9 +54,9 @@ days_to_hold = timeline_options[selected_timeline]
 profit_target_pct = st.sidebar.slider("Desired Profit Target (%)", 1.0, 30.0, 5.0, 0.5)
 
 st.sidebar.header("🛡️ 2. Live Market Filters")
-min_ai_score = st.sidebar.slider("Minimum AI Confidence (%)", 88.0, 99.9, 90.0, 0.1) / 100.0
-min_volume = st.sidebar.selectbox("Minimum Daily Volume", ["500,000+ (High Liquidity)", "1,000,000+ (Ultra Liquid)"])
-volume_threshold = 500000 if "500" in min_volume else 1000000
+min_ai_score = st.sidebar.slider("Minimum AI Confidence (%)", 50.0, 99.9, 60.0, 0.1) / 100.0
+min_volume = st.sidebar.selectbox("Minimum Daily Volume", ["100,000+ (Standard)", "500,000+ (High Liquidity)"])
+volume_threshold = 100000 if "100" in min_volume else 500000
 
 st.sidebar.header("💰 3. Risk Management")
 account_capital = st.sidebar.number_input("Trading Capital (₹)", min_value=10000.0, value=500000.0, step=10000.0)
@@ -69,11 +69,10 @@ if run_live:
     if top_stocks.empty:
         st.error("⚠️ Background AI scan has not completed yet or found 0 setups today. Please check GitHub Actions.")
     else:
-        # Filter dataframe instantly by AI score before API calls
         filtered_ai_stocks = top_stocks[top_stocks["AI_Score"] >= min_ai_score]
         
         if filtered_ai_stocks.empty:
-            st.warning(f"⚠️ No stocks met the extreme AI confidence threshold of {min_ai_score*100}%.")
+            st.warning(f"⚠️ No stocks met the AI confidence threshold of {min_ai_score*100}%.")
         else:
             progress_text = "Establishing secure connection to live market data..."
             progress_bar = st.progress(0, text=progress_text)
@@ -99,14 +98,12 @@ if run_live:
                     curr_price = float(df["Close"].iloc[-1])
                     live_volume = int(df["Volume"].iloc[-1])
                     
-                    # FILTER: Live Volume Check
                     if live_volume < volume_threshold: continue
                     
                     hl, hc, lc = df["High"] - df["Low"], np.abs(df["High"] - df["Close"].shift()), np.abs(df["Low"] - df["Close"].shift())
                     df["ATR"] = pd.concat([hl, hc, lc], axis=1).max(axis=1).rolling(14).mean()
                     atr = float(df["ATR"].iloc[-1])
                     
-                    # FILTER: Target Velocity Math
                     daily_pct_move = (atr / curr_price) * 100
                     max_expected_move = daily_pct_move * (days_to_hold * 0.75) 
                     if max_expected_move < profit_target_pct: continue 
@@ -120,16 +117,14 @@ if run_live:
                     rsi = float(100 - (100 / (1 + (gain / loss))).iloc[-1])
                     ema20, ema50, ema200 = float(df["EMA_20"].iloc[-1]), float(df["EMA_50"].iloc[-1]), float(df["EMA_200"].iloc[-1])
                     
-                    # STRICT 5-PILLAR MATH
                     p1 = 20 if curr_price > ema200 else 0 
-                    if p1 < 20: continue # Hard Reject
+                    if p1 < 20: continue 
                     p2 = 20 if curr_price > ema20 > ema50 > ema200 else (15 if curr_price > ema20 > ema50 else 8)
                     p3 = 20 if 55 <= rsi <= 75 else 12
                     p4 = 20 if ema50 > ema200 else 12
                     p5 = int(ai_score * 20)
                     total_score = p1 + p2 + p3 + p4 + p5
                     
-                    # Execution Maths
                     target_price = round(curr_price * (1 + profit_target_pct / 100.0), 2)
                     stop_loss_price = round(curr_price * 0.95, 2) if days_to_hold <= 7 else round(curr_price * 0.92, 2)
                     risk_per_share = round(curr_price - stop_loss_price, 2)
@@ -137,9 +132,8 @@ if run_live:
                     shares_to_buy = int((account_capital * (risk_pct/100)) / risk_per_share) if risk_per_share > 0 else 0
                     strict_deadline = (datetime.today() + timedelta(days=days_to_hold)).strftime("%B %d, %Y")
                     
-                    # RENDER UI
                     with st.expander(f"🏆 Rank #{displayed_count+1}: {ticker} | Score: {total_score}/100", expanded=(displayed_count==0)):
-                        st.markdown(f'<div class="premium-badge">🛡️ INSTITUTIONAL PASS: 100% FUNDAMENTALS & TARGET VELOCITY</div>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="premium-badge">🛡️ KHUSHANK\'S SCREENER PASS: 100% FUNDAMENTALS & TARGET VELOCITY</div>', unsafe_allow_html=True)
                         
                         col1, col2, col3, col4 = st.columns(4)
                         col1.metric("Live Price", f"₹{curr_price:,.2f}", delta=f"{rsi:.1f} RSI", delta_color="normal")
@@ -192,9 +186,9 @@ if run_live:
             progress_bar.empty()
             
             if displayed_count == 0:
-                st.error(f"⚠️ Zero stocks survived. The combination of >{min_ai_score*100}% AI Confidence, 100% Fundamentals, and your strict timeframe/target is too demanding for today's market. Cash is King.")
+                st.error(f"⚠️ Zero stocks survived. Lower your AI Confidence threshold slightly or adjust your target.")
             else:
                 st.balloons()
-                st.success(f"Successfully secured {displayed_count} flawless institutional setups.")
+                st.success(f"Successfully secured {displayed_count} flawless institutional setups for Khushank's Screener.")
 else:
     st.info("👈 Configure your exact execution parameters in the sidebar, then click **Scan Live Markets & Filter**.")
