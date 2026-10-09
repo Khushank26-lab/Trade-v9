@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 import time
 
 # --- PAGE CONFIGURATION ---
-st.set_page_config(page_title="Khushank AI Screener", page_icon="⚡", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="K hushank AI Screener", page_icon="⚡", layout="wide", initial_sidebar_state="expanded")
 
 # --- ADVANCED UI ANIMATIONS & GLASSMORPHISM CSS ---
 st.markdown("""
