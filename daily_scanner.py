@@ -4,20 +4,20 @@ import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 import time
 
-# For demonstration, we load a broad universe of 1,000+ NSE/BSE stocks.
-# (In the future, you can replace this with a CSV containing all 7,500 symbols)
-from urllib.request import Request, urlopen
-import json
-
-def get_broad_market_tickers():
-    # Fallback large list covering major NSE segments (Expandable to 7500)
-    return [
-        "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS", "SBIN.NS", "BHARTIARTL.NS", "ITC.NS", 
-        "LT.NS", "BAJFINANCE.NS", "HAL.NS", "ZOMATO.NS", "TRENT.NS", "BSE.NS", "CDSL.NS", "IRFC.NS", "SUZLON.NS",
-        "IREDA.NS", "RVNL.NS", "JINDALSTEL.NS", "DIXON.NS", "POLYCAB.NS", "KALYANKJIL.NS", "ANGELONE.NS"
-        # We start with a high-liquidity subset here to prevent GitHub Actions timeout.
-        # You can upload a 'tickers.csv' to this repo later with 7,500 symbols.
-    ]
+def get_all_market_tickers():
+    print("Downloading official master list from NSE...")
+    try:
+        # Dynamically fetches the live master list of all active NSE companies
+        url = "https://archives.nseindia.com/content/equities/EQUITY_L.csv"
+        nse_df = pd.read_csv(url)
+        # Add '.NS' to match Yahoo Finance formatting
+        tickers = (nse_df['SYMBOL'] + ".NS").tolist()
+        print(f"Successfully loaded {len(tickers)} NSE stocks.")
+        return tickers
+    except Exception as e:
+        print(f"Failed to fetch NSE list: {e}")
+        # Fallback list if NSE servers are down
+        return ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS"]
 
 def train_and_evaluate(ticker):
     try:
@@ -34,7 +34,6 @@ def train_and_evaluate(ticker):
         rs = gain / loss
         df["RSI"] = 100 - (100 / (1 + rs))
         
-        # Machine Learning target (did it go up 5% in 14 days?)
         future_highs = df['High'].rolling(window=14).max().shift(-14)
         df['Target_Hit'] = np.where((future_highs - df['Close']) / df['Close'] >= 0.05, 1, 0)
         
@@ -58,16 +57,21 @@ def train_and_evaluate(ticker):
 
 if __name__ == "__main__":
     print("Starting background market scan...")
-    tickers = get_broad_market_tickers()
+    tickers = get_all_market_tickers()
     results = []
     
-    for t in tickers:
+    # Scanning all thousands of stocks
+    for i, t in enumerate(tickers):
+        if i % 100 == 0:
+            print(f"Scanned {i}/{len(tickers)} stocks...")
+            
         res = train_and_evaluate(t)
-        if res and res["AI_Score"] > 0.55: # Only save stocks with >55% AI Confidence
+        if res and res["AI_Score"] > 0.55: 
             results.append(res)
-        time.sleep(0.5) # Prevent Yahoo Finance IP Ban
-        
-    # Sort and save the top 50 to a CSV file
-    df_results = pd.DataFrame(results).sort_values(by="AI_Score", ascending=False).head(50)
-    df_results.to_csv("top_setups.csv", index=False)
-    print("Saved top setups to top_setups.csv!")
+            
+    if results:
+        df_results = pd.DataFrame(results).sort_values(by="AI_Score", ascending=False).head(100)
+        df_results.to_csv("top_setups.csv", index=False)
+        print(f"Scan complete! Saved top {len(df_results)} setups to top_setups.csv.")
+    else:
+        print("No setups found today.")
