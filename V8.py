@@ -30,8 +30,14 @@ st.markdown(
 # --- SIDEBAR INPUTS ---
 st.sidebar.header("⚙️ Auto-Fetch Parameters")
 raw_ticker = st.sidebar.text_input(
-    "Stock Ticker (e.g. RELIANCE.NS, BSE.NS)", value="RELIANCE.NS"
+    "Stock Ticker (e.g. RELIANCE, BSE, TCS)", value="BSE"
 ).strip().upper()
+
+# Automatically append .NS for Indian NSE stocks if suffix is missing
+if not raw_ticker.endswith((".NS", ".BO")):
+  ticker = raw_ticker + ".NS"
+else:
+  ticker = raw_ticker
 
 profit_target_pct = st.sidebar.slider(
     "Desired Profit Target (%)", min_value=3.0, max_value=30.0, value=10.0, step=0.5
@@ -50,13 +56,20 @@ st.markdown(
 st.markdown("---")
 
 if run_eval:
-  with st.spinner(f"Fetching live data and running 5-pillar analysis for {raw_ticker}..."):
+  with st.spinner(f"Fetching live data and running 5-pillar analysis for {ticker}..."):
     try:
-      stock = yf.Ticker(raw_ticker)
+      stock = yf.Ticker(ticker)
       hist = stock.history(period="6mo")
 
-      if hist.empty:
-        st.error(f"Could not fetch data for `{raw_ticker}`. Please ensure you include exchange suffix like `.NS` for NSE stocks (e.g., `TCS.NS`, `SBIN.NS`).")
+      # Handle multi-index columns if returned by yfinance
+      if isinstance(hist.columns, pd.MultiIndex):
+        hist.columns = hist.columns.get_level_values(0)
+
+      # Clean missing values
+      hist = hist.dropna(subset=["Close"])
+
+      if hist.empty or len(hist) < 2:
+        st.error(f"Could not fetch valid price data for `{ticker}`. Please verify the stock symbol.")
         st.stop()
 
       current_price = float(hist["Close"].iloc[-1])
@@ -70,10 +83,8 @@ if run_eval:
       ema50 = float(hist["EMA_50"].iloc[-1])
 
       # Automated Scoring based on live quantitative rules (0-20 per pillar)
-      # Pillar 1: Fundamentals / Coffee Can Proxy
       p1_score = 17 if current_price > ema50 else 12
 
-      # Pillar 2: Technical Momentum & EMA Alignment
       if current_price > ema20 > ema50:
         p2_score = 19
       elif current_price > ema20:
@@ -81,16 +92,13 @@ if run_eval:
       else:
         p2_score = 10
 
-      # Pillar 3: Chart & Price Action Momentum
-      recent_return = ((current_price - hist["Close"].iloc[-20]) / hist["Close"].iloc[-20]) * 100
+      recent_return = ((current_price - hist["Close"].iloc[-20]) / hist["Close"].iloc[-20]) * 100 if len(hist) >= 20 else 0
       p3_score = 18 if recent_return > 0 else 12
 
-      # Pillar 4: Macro & Regime (Trend based)
       p4_score = 16 if ema20 > ema50 else 13
 
-      # Pillar 5: News & Catalyst Sentiment (Volume & Price action momentum)
-      vol_avg = hist["Volume"].mean()
-      recent_vol = hist["Volume"].iloc[-1]
+      vol_avg = hist["Volume"].mean() if "Volume" in hist.columns else 1
+      recent_vol = hist["Volume"].iloc[-1] if "Volume" in hist.columns else 1
       p5_score = 17 if recent_vol >= vol_avg else 14
 
       total_score = p1_score + p2_score + p3_score + p4_score + p5_score
@@ -113,7 +121,7 @@ if run_eval:
       strict_deadline = (datetime.today() + timedelta(days=days_to_add)).strftime("%B %d, %Y")
 
       # Price Levels & Risk Math
-      stop_loss_price = round(current_price * 0.93, 2)  # 7% Stop Loss
+      stop_loss_price = round(current_price * 0.93, 2)
       target_price = round(current_price * (1 + profit_target_pct / 100.0), 2)
       risk_per_share = round(current_price - stop_loss_price, 2)
       reward_per_share = round(target_price - current_price, 2)
@@ -123,7 +131,7 @@ if run_eval:
       max_capital_risk = account_capital * 0.01
       shares_to_buy = int(max_capital_risk / risk_per_share) if risk_per_share > 0 else 0
 
-      # Support & Resistance Estimation from 6M High/Low
+      # Support & Resistance Estimation
       support_zone = f"₹{round(hist['Low'].min(), 2)} - ₹{round(current_price * 0.97, 2)}"
       resistance_zone = f"₹{round(current_price * 1.03, 2)} - ₹{round(hist['High'].max(), 2)}"
       breakout_trigger = f"₹{round(current_price * 1.01, 2)}"
@@ -131,7 +139,7 @@ if run_eval:
       # --- DASHBOARD METRICS ---
       col1, col2, col3, col4 = st.columns(4)
       with col1:
-        st.metric(label=f"Live Price ({raw_ticker})", value=f"₹{current_price:,.2f}", delta=f"{price_change:+.2f}%")
+        st.metric(label=f"Live Price ({ticker})", value=f"₹{current_price:,.2f}", delta=f"{price_change:+.2f}%")
       with col2:
         st.metric("Overall Quant Score", f"{total_score}/100")
       with col3:
@@ -194,7 +202,7 @@ if run_eval:
         st.subheader("Precision Trade Execution Plan")
         col_a, col_b = st.columns(2)
         with col_a:
-          st.markdown(f"**Asset / Ticker:** `{raw_ticker}`")
+          st.markdown(f"**Asset / Ticker:** `{ticker}`")
           st.markdown(f"**Current Live Price:** `₹{current_price:,.2f}`")
           st.markdown(f"**Entry Range:** `₹{current_price:,.2f} - {breakout_trigger}`")
           st.markdown(f"**Stop-Loss (7.0% Max Risk):** `₹{stop_loss_price:,.2f}` 🔴")
@@ -208,7 +216,7 @@ if run_eval:
 
       with tab3:
         st.subheader("Key Chart Support & Resistance Mapping")
-        st.info("📌 Automatically calculated from 6-month historical price boundaries and moving averages.")
+        st.info("📌 Automatically calculated from historical price boundaries and moving averages.")
         
         col_c, col_d, col_e = st.columns(3)
         with col_c:
@@ -233,4 +241,4 @@ if run_eval:
       st.error(f"Error fetching data or running evaluation: {e}")
 
 else:
-  st.info("👈 Enter your stock ticker in the sidebar (e.g. `RELIANCE.NS`, `TCS.NS`, `BSE.NS`) and click **Run Auto 5-Pillar Evaluation**.")
+  st.info("👈 Enter your stock name in the sidebar (e.g. `BSE`, `RELIANCE`, `TCS`) and click **Run Auto 5-Pillar Evaluation**.")
