@@ -1,12 +1,14 @@
 from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import streamlit as st
 import yfinance as yf
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
-    page_title="v9 5-Pillar Auto-Fetch Swing Trade Evaluator",
+    page_title="v9 5-Pillar Professional Trade Evaluator",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -28,13 +30,17 @@ st.markdown(
 )
 
 # --- SIDEBAR INPUTS ---
-st.sidebar.header("⚙️ Auto-Fetch Parameters")
+st.sidebar.header("⚙️ Real-Time Parameters")
 raw_ticker = st.sidebar.text_input(
-    "Stock Ticker (e.g. RELIANCE, BSE, TCS)", value="BSE"
+    "Stock / Index (e.g. RELIANCE, TCS, NIFTY)", value="RELIANCE"
 ).strip().upper()
 
-# Automatically append .NS for Indian NSE stocks if suffix is missing
-if not raw_ticker.endswith((".NS", ".BO")):
+# Smart Ticker Mapping for Indian Markets
+if raw_ticker in ["NIFTY", "NIFTY50"]:
+  ticker = "^NSEI"
+elif raw_ticker == "SENSEX":
+  ticker = "^BSESN"
+elif not raw_ticker.endswith((".NS", ".BO")) and not raw_ticker.startswith("^"):
   ticker = raw_ticker + ".NS"
 else:
   ticker = raw_ticker
@@ -46,17 +52,17 @@ account_capital = st.sidebar.number_input(
     "Total Trading Capital (₹)", min_value=10000.0, value=500000.0, step=10000.0
 )
 
-run_eval = st.sidebar.button("🚀 Run Auto 5-Pillar Evaluation")
+run_eval = st.sidebar.button("🚀 Run Professional Evaluation")
 
 # --- MAIN APP HEADER ---
-st.title("📈 v9 Auto-Fetch 5-Pillar Swing Trade Evaluator")
+st.title("📈 v9 Professional Swing Trade Evaluator & Charts")
 st.markdown(
-    "*Instant Live Data Integration, Automated Technical Scoring, Strict Non-Extending Deadlines & Risk Architecture.*"
+    "*Real-Time Data Integration, Professional Candlestick Graphics, Automated Technical Scoring & Risk Architecture.*"
 )
 st.markdown("---")
 
 if run_eval:
-  with st.spinner(f"Fetching live data and running 5-pillar analysis for {ticker}..."):
+  with st.spinner(f"Fetching real-time data and rendering charts for {ticker}..."):
     try:
       stock = yf.Ticker(ticker)
       hist = stock.history(period="6mo")
@@ -65,26 +71,24 @@ if run_eval:
       if isinstance(hist.columns, pd.MultiIndex):
         hist.columns = hist.columns.get_level_values(0)
 
-      # Clean missing values
       hist = hist.dropna(subset=["Close"])
 
       if hist.empty or len(hist) < 2:
-        st.error(f"Could not fetch valid price data for `{ticker}`. Please verify the stock symbol.")
+        st.error(f"Could not fetch valid price data for `{ticker}`. Please check the symbol.")
         st.stop()
 
       current_price = float(hist["Close"].iloc[-1])
       prev_close = float(hist["Close"].iloc[-2])
       price_change = ((current_price - prev_close) / prev_close) * 100
 
-      # --- AUTOMATED TECHNICAL CALCULATIONS ---
+      # --- TECHNICAL CALCULATIONS ---
       hist["EMA_20"] = hist["Close"].ewm(span=20).mean()
       hist["EMA_50"] = hist["Close"].ewm(span=50).mean()
       ema20 = float(hist["EMA_20"].iloc[-1])
       ema50 = float(hist["EMA_50"].iloc[-1])
 
-      # Automated Scoring based on live quantitative rules (0-20 per pillar)
+      # Automated Scoring
       p1_score = 17 if current_price > ema50 else 12
-
       if current_price > ema20 > ema50:
         p2_score = 19
       elif current_price > ema20:
@@ -94,7 +98,6 @@ if run_eval:
 
       recent_return = ((current_price - hist["Close"].iloc[-20]) / hist["Close"].iloc[-20]) * 100 if len(hist) >= 20 else 0
       p3_score = 18 if recent_return > 0 else 12
-
       p4_score = 16 if ema20 > ema50 else 13
 
       vol_avg = hist["Volume"].mean() if "Volume" in hist.columns else 1
@@ -104,48 +107,46 @@ if run_eval:
       total_score = p1_score + p2_score + p3_score + p4_score + p5_score
       verdict = "TAKE" if total_score >= 75 else "NOT"
 
-      # Timeframe & Deadline Mapping
+      # Timeframe & Deadlines
       if profit_target_pct <= 4.0:
-        horizon = "Scalping (1 to 3 Trading Days)"
+        horizon = "Scalping (1 to 3 Days)"
         days_to_add = 3
       elif profit_target_pct <= 10.0:
-        horizon = "Short-Term Momentum (3 to 10 Days)"
+        horizon = "Short-Term (3 to 10 Days)"
         days_to_add = 14
       elif profit_target_pct <= 20.0:
         horizon = "Swing Trading (10 to 25 Days)"
         days_to_add = 35
       else:
-        horizon = "Long-Term Coffee Can (1 to 3 Years)"
+        horizon = "Long-Term (1 to 3 Years)"
         days_to_add = 365
 
       strict_deadline = (datetime.today() + timedelta(days=days_to_add)).strftime("%B %d, %Y")
 
-      # Price Levels & Risk Math
+      # Price Levels & Risk
       stop_loss_price = round(current_price * 0.93, 2)
       target_price = round(current_price * (1 + profit_target_pct / 100.0), 2)
       risk_per_share = round(current_price - stop_loss_price, 2)
       reward_per_share = round(target_price - current_price, 2)
       risk_reward_ratio = round(reward_per_share / risk_per_share, 2) if risk_per_share > 0 else 0
 
-      # Position Sizing (1% Capital Risk Rule)
       max_capital_risk = account_capital * 0.01
       shares_to_buy = int(max_capital_risk / risk_per_share) if risk_per_share > 0 else 0
 
-      # Support & Resistance Estimation
       support_zone = f"₹{round(hist['Low'].min(), 2)} - ₹{round(current_price * 0.97, 2)}"
       resistance_zone = f"₹{round(current_price * 1.03, 2)} - ₹{round(hist['High'].max(), 2)}"
       breakout_trigger = f"₹{round(current_price * 1.01, 2)}"
 
-      # --- DASHBOARD METRICS ---
+      # --- METRICS DASHBOARD ---
       col1, col2, col3, col4 = st.columns(4)
       with col1:
-        st.metric(label=f"Live Price ({ticker})", value=f"₹{current_price:,.2f}", delta=f"{price_change:+.2f}%")
+        st.metric(label=f"Real-Time Price ({ticker})", value=f"₹{current_price:,.2f}", delta=f"{price_change:+.2f}%")
       with col2:
         st.metric("Overall Quant Score", f"{total_score}/100")
       with col3:
-        st.metric("Risk / Reward Ratio", f"1:{risk_reward_ratio}")
+        st.metric("Risk / Reward", f"1:{risk_reward_ratio}")
       with col4:
-        st.metric("Trading Horizon", horizon.split("(")[0])
+        st.metric("Horizon", horizon.split("(")[0])
 
       st.markdown("<br>", unsafe_allow_html=True)
 
@@ -163,16 +164,63 @@ if run_eval:
 
       st.markdown("<br>", unsafe_allow_html=True)
 
-      # --- TABS FOR STRUCTURED REPORT ---
+      # --- TABS FOR REPORT & CHARTS ---
       tab1, tab2, tab3, tab4 = st.tabs([
+          "📊 Advanced Candlestick Chart",
           "📊 5-Pillar Breakdown",
           "🎯 Execution & Sizing",
-          "🗺️ Chart Levels & Price Action",
           "📚 Strategic Safeguards",
       ])
 
       with tab1:
-        st.subheader("The 5-Pillar Algorithmic Scorecard (Auto-Evaluated)")
+        st.subheader("Interactive Professional Candlestick Chart")
+        st.info("📌 Displays real-time price action with Candlestick patterns, 20 & 50 EMAs, and Volume indicators.")
+
+        # Create Plotly Candlestick Subplot Chart
+        fig = make_subplots(
+            rows=2, cols=1, shared_axes=True,
+            row_heights=[0.75, 0.25], vertical_spacing=0.03
+        )
+
+        # Candlestick trace
+        fig.add_trace(go.Candlestick(
+            x=hist.index,
+            open=hist['Open'], high=hist['High'],
+            low=hist['Low'], close=hist['Close'],
+            name="Candlestick"
+        ), row=1, col=1)
+
+        # EMA Lines
+        fig.add_trace(go.Scatter(
+            x=hist.index, y=hist['EMA_20'],
+            line=dict(color='#ffa726', width=1.5), name="20 EMA"
+        ), row=1, col=1)
+
+        fig.add_trace(go.Scatter(
+            x=hist.index, y=hist['EMA_50'],
+            line=dict(color='#29b6f6', width=1.5), name="50 EMA"
+        ), row=1, col=1)
+
+        # Volume Bar Chart
+        colors = ['#ef5350' if row['Open'] - row['Close'] >= 0 else '#26a69a' for index, row in hist.iterrows()]
+        fig.add_trace(go.Bar(
+            x=hist.index, y=hist['Volume'],
+            marker_color=colors, name="Volume"
+        ), row=2, col=1)
+
+        fig.update_layout(
+            title=f"{ticker} - Real-Time Technical Analysis",
+            yaxis_title="Price (₹)",
+            xaxis_rangeslider_visible=False,
+            template="plotly_dark",
+            height=600,
+            margin=dict(l=10, r=10, t=40, b=10)
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+      with tab2:
+        st.subheader("The 5-Pillar Algorithmic Scorecard")
         score_data = {
             "Pillar": [
                 "1. Fundamentals & Coffee Can Safety",
@@ -182,11 +230,8 @@ if run_eval:
                 "5. News Catalysts & Sentiment",
             ],
             "Score Obtained": [
-                f"{p1_score}/20",
-                f"{p2_score}/20",
-                f"{p3_score}/20",
-                f"{p4_score}/20",
-                f"{p5_score}/20",
+                f"{p1_score}/20", f"{p2_score}/20",
+                f"{p3_score}/20", f"{p4_score}/20", f"{p5_score}/20",
             ],
             "Evaluation Status": [
                 "✅ Passed" if p1_score >= 15 else "⚠️ Moderate",
@@ -198,26 +243,24 @@ if run_eval:
         }
         st.table(pd.DataFrame(score_data))
 
-      with tab2:
+      with tab3:
         st.subheader("Precision Trade Execution Plan")
         col_a, col_b = st.columns(2)
         with col_a:
           st.markdown(f"**Asset / Ticker:** `{ticker}`")
-          st.markdown(f"**Current Live Price:** `₹{current_price:,.2f}`")
+          st.markdown(f"**Current Price:** `₹{current_price:,.2f}`")
           st.markdown(f"**Entry Range:** `₹{current_price:,.2f} - {breakout_trigger}`")
-          st.markdown(f"**Stop-Loss (7.0% Max Risk):** `₹{stop_loss_price:,.2f}` 🔴")
+          st.markdown(f"**Stop-Loss (7% Risk):** `₹{stop_loss_price:,.2f}` 🔴")
           st.markdown(f"**Target Price (+{profit_target_pct}%):** `₹{target_price:,.2f}` 🟢")
         with col_b:
-          st.markdown(f"**Strict Non-Extending Deadline:** `{strict_deadline}` ⏳")
+          st.markdown(f"**Strict Deadline:** `{strict_deadline}` ⏳")
           st.markdown(f"**Max Capital Risk (1% Rule):** `₹{max_capital_risk:,.2f}`")
           st.markdown(f"**Risk Per Share:** `₹{risk_per_share:,.2f}`")
-          st.markdown(f"**Optimal Shares to Allocate:** `{shares_to_buy:,} units`")
+          st.markdown(f"**Optimal Shares:** `{shares_to_buy:,} units`")
           st.markdown(f"**Risk/Reward Ratio:** `1:{risk_reward_ratio}`")
 
-      with tab3:
-        st.subheader("Key Chart Support & Resistance Mapping")
-        st.info("📌 Automatically calculated from historical price boundaries and moving averages.")
-        
+        st.markdown("---")
+        st.subheader("Key Support & Resistance Zones")
         col_c, col_d, col_e = st.columns(3)
         with col_c:
           st.markdown(f"<div class='metric-card'><h4>Support Zone</h4><p>{support_zone}</p></div>", unsafe_allow_html=True)
@@ -226,19 +269,14 @@ if run_eval:
         with col_e:
           st.markdown(f"<div class='metric-card'><h4>Resistance Zone</h4><p>{resistance_zone}</p></div>", unsafe_allow_html=True)
 
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.subheader("6-Month Price & EMA Chart")
-        chart_data = hist[["Close", "EMA_20", "EMA_50"]]
-        st.line_chart(chart_data)
-
       with tab4:
-        st.subheader("Strategic Book Insights & Behavioral Safeguards")
-        st.markdown("- **Operator & Liquidity Check (*Bulls, Bears and Other Beasts*):** Ensure volume supports the move; avoid illiquid operator traps.")
-        st.markdown("- **Moat & Governance Filter (*Coffee Can Investing*):** Zero promoter pledge and stable ROCE protect against structural meltdowns.")
-        st.markdown(f"- **Behavioral Discipline & Deadline Rule (*Stocks to Riches*):** **Never extend the deadline ({strict_deadline}).** If the profit target is not reached by this date, exit the trade unconditionally to preserve capital velocity.")
+        st.subheader("Strategic Book Insights & Safeguards")
+        st.markdown("- **Operator Check (*Bulls, Bears and Other Beasts*):** Monitor volume spikes to confirm true breakouts.")
+        st.markdown("- **Moat Filter (*Coffee Can Investing*):** Zero promoter pledge and strong ROCE ensure structural safety.")
+        st.markdown(f"- **Discipline Rule (*Stocks to Riches*):** **Never extend the deadline ({strict_deadline}).** Exit unconditionally if the target isn't met.")
 
     except Exception as e:
-      st.error(f"Error fetching data or running evaluation: {e}")
+      st.error(f"Error loading charts or market data: {e}")
 
 else:
-  st.info("👈 Enter your stock name in the sidebar (e.g. `BSE`, `RELIANCE`, `TCS`) and click **Run Auto 5-Pillar Evaluation**.")
+  st.info("👈 Enter a stock ticker in the sidebar (e.g. `RELIANCE`, `TCS`, `INFY`) and click **Run Professional Evaluation**.")
