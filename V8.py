@@ -176,9 +176,9 @@ if run_eval:
         st.subheader("Interactive Professional Candlestick Chart")
         st.info("📌 Displays real-time price action with Candlestick patterns, 20 & 50 EMAs, and Volume indicators.")
 
-        # Create Plotly Candlestick Subplot Chart
+        # Create Plotly Candlestick Subplot Chart (Fixed shared_xaxes)
         fig = make_subplots(
-            rows=2, cols=1, shared_axes=True,
+            rows=2, cols=1, shared_xaxes=True,
             row_heights=[0.75, 0.25], vertical_spacing=0.03
         )
 
