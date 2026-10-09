@@ -70,7 +70,7 @@ if __name__ == "__main__":
             results.append(res)
             
     if results:
-        df_results = pd.DataFrame(results).sort_values(by="AI_Score", ascending=False).head(100)
+        df_results = pd.DataFrame(results).sort_values(by="AI_Score", ascending=False).head(500)
         df_results.to_csv("top_setups.csv", index=False)
         print(f"Scan complete! Saved top {len(df_results)} setups to top_setups.csv.")
     else:
