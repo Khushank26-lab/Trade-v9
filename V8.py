@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 import time
 
 # --- PAGE CONFIGURATION ---
-st.set_page_config(page_title="Khushank's Screener ", page_icon="⚡", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Khushank's Screener v9", page_icon="⚡", layout="wide", initial_sidebar_state="expanded")
 
 # --- UI ANIMATIONS & GLASSMORPHISM CSS ---
 st.markdown("""
@@ -85,7 +85,6 @@ if run_live:
                 
                 try:
                     tk = yf.Ticker(ticker)
-                    # Real-time price exact fetch to eliminate ₹4-₹5 drift
                     info = tk.info
                     curr_price = info.get('currentPrice', None)
                     if not curr_price:
@@ -120,14 +119,11 @@ if run_live:
                     rsi = float(100 - (100 / (1 + (gain / (loss + 1e-9)))).iloc[-1])
                     ema20, ema50, ema200 = float(df["EMA_20"].iloc[-1]), float(df["EMA_50"].iloc[-1]), float(df["EMA_200"].iloc[-1])
                     
-                    # 5-Pillar Score Distribution (/20 each = 100 total)
-                    p1 = 20 if curr_price > ema200 else 10 # Pillar 1: Fundamentals & Structure
-                    p2 = 20 if curr_price > ema20 > ema50 > ema200 else 14 # Pillar 2: Technical Momentum
-                    p3 = 20 if 55 <= rsi <= 75 else 14 # Pillar 3: RSI & Candlestick Pattern
-                    p4 = 20 if ema50 > ema200 else 12 # Pillar 4: Macro Regime
-                    p5 = int(ai_score * 20) # Pillar 5: AI & News Catalyst Sentiment
-                    
-                    total_pillar_score = p1 + p2 + p3 + p4 + p5
+                    p1 = 20 if curr_price > ema200 else 10 
+                    p2 = 20 if curr_price > ema20 > ema50 > ema200 else 14 
+                    p3 = 20 if 55 <= rsi <= 75 else 14 
+                    p4 = 20 if ema50 > ema200 else 12 
+                    p5 = int(ai_score * 20) 
                     
                     target_price = round(curr_price * (1 + profit_target_pct / 100.0), 2)
                     stop_loss_price = round(curr_price * 0.95, 2) if days_to_hold <= 7 else round(curr_price * 0.92, 2)
@@ -186,7 +182,6 @@ if run_live:
             if displayed_count == 0:
                 st.error("⚠️ Zero stocks met your current filter criteria. Lower your minimum score threshold or adjust target.")
             else:
-                st.balloons()
                 st.success(f"Successfully loaded {displayed_count} institutional setups under Khushank's Screener v9.")
 else:
     st.info("👈 Configure your exact execution parameters in the sidebar, then click **Scan Live Markets & Filter**.")
